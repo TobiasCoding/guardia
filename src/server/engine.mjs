@@ -19,7 +19,9 @@ export function health(r){
 export function sample(r){const h=health(r),p={t:Math.round(r.elapsed),error:h.error,latency:h.latency,budget:Math.round(r.budget*10)/10};if(r.samples.at(-1)?.t===p.t)r.samples[r.samples.length-1]=p;else r.samples.push(p);if(r.samples.length>180)r.samples.shift();}
 function finish(r,status,now,message){
  r.status=status;r.finishedAt=now;const s=getScenario(r.scenarioId);
- r.breakdown={time:Math.round(Math.max(0,1-r.elapsed/s.duration)*250),budget:Math.round(r.budget*3),diagnosis:Math.min(200,r.evidence.length*50),communication:r.flags.communicated?100:0,recovery:status==='resolved'?150:0,penalty:r.mistakes*50};
+ // Remaining time and preserved budget only reward a verified recovery; otherwise conceding at once scored ~550.
+ const ok=status==='resolved';
+ r.breakdown={time:ok?Math.round(Math.max(0,1-r.elapsed/s.duration)*250):0,budget:ok?Math.round(r.budget*3):0,diagnosis:Math.min(200,r.evidence.length*50),communication:r.flags.communicated?100:0,recovery:status==='resolved'?150:0,penalty:r.mistakes*50};
  const b=r.breakdown;r.score=Math.max(0,Math.min(1000,b.time+b.budget+b.diagnosis+b.communication+b.recovery-b.penalty));event(r,status==='resolved'?'success':'failure',message,null,now);sample(r);
 }
 export function tick(r,now,extraSeconds=0){

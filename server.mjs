@@ -5,18 +5,21 @@ import {fileURLToPath} from 'node:url';
 import {Readable} from 'node:stream';
 import {openDatabase} from './src/server/sqlite-node.mjs';
 import {Store} from './src/server/store.mjs';
-import {handleApi,apiPath,SECURITY_HEADERS} from './src/server/api.mjs';
+import {handleApi,apiPath,parseOrigins,SECURITY_HEADERS} from './src/server/api.mjs';
 const ROOT=fileURLToPath(new URL('.',import.meta.url));
 const db=openDatabase(process.env.DATABASE_PATH||resolve(ROOT,'data/guardia.sqlite')),store=new Store(db);
 const port=Number(process.env.PORT||3000),host=process.env.HOST||'127.0.0.1';
+const allowedOrigins=parseOrigins(process.env.ALLOWED_ORIGINS),trustProxy=['1','true','yes'].includes(String(process.env.TRUST_PROXY||'').toLowerCase());
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.txt':'text/plain; charset=utf-8'};
 const server=createServer(async(req,res)=>{
  try{
-  const url=new URL(req.url||'/',`http://${req.headers.host||`localhost:${port}`}`);
+  const proto=trustProxy&&String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https'?'https':'http';
+  const url=new URL(req.url||'/',`${proto}://${req.headers.host||`localhost:${port}`}`);
   for(const[k,v]of Object.entries(SECURITY_HEADERS))res.setHeader(k,v);
   if(apiPath(url.href)){
    const request=new Request(url,{method:req.method,headers:req.headers,body:['GET','HEAD'].includes(req.method)?undefined:Readable.toWeb(req),duplex:'half'});
-   const response=await handleApi(request,store,{ip:req.socket.remoteAddress||'local'});
+   const forwarded=trustProxy?String(req.headers['x-forwarded-for']||'').split(',')[0].trim():'';
+   const response=await handleApi(request,store,{ip:forwarded||req.socket.remoteAddress||'local',allowedOrigins});
    res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));return;
   }
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end('Method not allowed');return;}

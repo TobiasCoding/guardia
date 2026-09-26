@@ -39,6 +39,10 @@ npm run build
 
 Revisá y conservá el lockfile generado. Después de instalar, revisá las dependencias y las advertencias del gestor de paquetes. Nunca publiques el servidor de desarrollo de Vite como backend de producción.
 
+## Origen permitido
+
+La API rechaza solicitudes de otros sitios con «Origen no autorizado». Si la app montada en Webflow Cloud (por ejemplo, `https://tu-sitio.com/guardia`) recibe ese error al crear una sala, definí la variable de entorno `ALLOWED_ORIGINS=https://tu-sitio.com` en la configuración de la app. Acepta varios orígenes separados por comas.
+
 ## Documentación oficial
 
 - https://developers.webflow.com/webflow-cloud/bring-your-own-app

@@ -19,6 +19,11 @@ npm run check
 
 La base SQLite se crea automáticamente en `data/guardia.sqlite`. Variables opcionales: `PORT`, `HOST` y `DATABASE_PATH`. El servidor escucha en loopback por defecto. Para una demostración en tu red local podés configurar `HOST=0.0.0.0`; para Internet usá un alojamiento con HTTPS.
 
+Si publicás el servidor detrás de un proxy inverso (nginx, Caddy, Cloudflare Tunnel, etc.):
+
+- `TRUST_PROXY=1` usa `X-Forwarded-For` y `X-Forwarded-Proto` para los límites por IP. Sin esto, todas las personas comparten el mismo límite de creación de salas.
+- El control de origen acepta el mismo host aunque el proxy termine HTTPS o reescriba `Host` (se considera `X-Forwarded-Host`). Si la app se sirve desde otro dominio, agregalo en `ALLOWED_ORIGINS`, separado por comas: `ALLOWED_ORIGINS=https://midominio.com,https://www.midominio.com`.
+
 ## Qué incluye
 
 - Tres incidentes completos: El deploy del viernes, Efecto dominó y Memoria prestada.
@@ -33,7 +38,7 @@ La base SQLite se crea automáticamente en `data/guardia.sqlite`. Variables opci
 
 ## Qué se verificó
 
-La reconstrucción incluida pasó 41 pruebas automatizadas de motor, API, persistencia y concurrencia. Se recorrieron los tres incidentes desde la interfaz, incluido un equipo con dos sesiones independientes. Los registros están en `test-artifacts/`.
+La suite incluida pasa 49 pruebas automatizadas de motor, API, persistencia y concurrencia. Se recorrieron los tres incidentes desde la interfaz, incluido un equipo con dos sesiones independientes. Los registros están en `test-artifacts/`.
 
 El navegador de pruebas de este entorno bloquea navegación directa a localhost. El arnés usó un adaptador de origen/almacenamiento para renderizar el cliente; las solicitudes llegaron al servidor HTTP y SQLite reales. Esto no valida aislamiento de origen ni CSP en un navegador de producción.
 

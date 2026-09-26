@@ -1,3 +1,4 @@
+.gitignore
 node_modules/
 dist/
 data/
@@ -5,3 +6,4 @@ data/
 .env*
 .dev.vars*
 __pycache__/
+claude*

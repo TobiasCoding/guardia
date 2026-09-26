@@ -20,12 +20,25 @@ async function body(req){
 async function authHash(req){const token=req.headers.get('authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];if(!token)throw new GameError('Necesitás entrar a la sala.',401);return digest(token);}
 function authorize(r,hash){const p=r.players.find(p=>p.tokenHash===hash);if(!p)throw new GameError('La sesión no pertenece a esta sala.',403);return p;}
 export function apiPath(url){const p=new URL(url).pathname,i=p.indexOf('/api/');return i<0?null:p.slice(i);}
-export async function handleApi(req,store,{now=Date.now(),ip='local'}={}){
+/** Accepts "abcd-2345", " ABCD 2345 " or lowercase input; returns the canonical 8-character code or null. */
+export function normalizeCode(v){const c=String(v??'').toUpperCase().replace(/[^A-Z0-9]/g,'');return /^[A-Z0-9]{8}$/.test(c)?c:null;}
+const hostOf=h=>{h=String(h||'').trim().toLowerCase();return h.replace(/:(80|443)$/,'');};
+export function parseOrigins(v){return String(v||'').split(',').map(o=>o.trim().toLowerCase().replace(/\/+$/,'')).filter(Boolean);}
+/** Same-site check tolerant of TLS-terminating proxies, forwarded hosts and mounted apps (e.g. Webflow Cloud). */
+export function originAllowed(req,allowed=[]){
+ const origin=req.headers.get('origin');if(!origin)return true;
+ const site=req.headers.get('sec-fetch-site');if(site==='same-origin'||site==='none')return true;
+ let o;try{o=new URL(origin);}catch{return false;}
+ if(allowed.includes('*')||allowed.includes(o.origin.toLowerCase()))return true;
+ const hosts=[new URL(req.url).host,req.headers.get('host'),...(req.headers.get('x-forwarded-host')||'').split(',')].map(hostOf).filter(Boolean);
+ return hosts.includes(hostOf(o.host));
+}
+export async function handleApi(req,store,{now=Date.now(),ip='local',allowedOrigins=[]}={}){
  const path=apiPath(req.url),method=req.method;
  try{
   if(!path)throw new GameError('Ruta no encontrada.',404);
   if(!['GET','POST','DELETE'].includes(method))throw new GameError('Método no permitido.',405);
-  const origin=req.headers.get('origin');if(origin&&origin!==new URL(req.url).origin)throw new GameError('Origen no autorizado.',403);
+  if(!originAllowed(req,typeof allowedOrigins==='string'?parseOrigins(allowedOrigins):allowedOrigins))throw new GameError('Origen no autorizado. Si publicás GUARDIA detrás de un proxy o con otro dominio, agregalo en ALLOWED_ORIGINS.',403);
   const client=await digest(`${new Date(now).toISOString().slice(0,10)}|${ip}`);await store.limit(`read:${client}`,240,60000,now);
   if(method==='GET'&&path==='/api/health')return json({ok:await store.health(),app:'guardia',storage:'sqlite',version:'1.0.0'});
   if(method==='GET'&&path==='/api/scenarios')return json({scenarios:publicScenarios()});
@@ -42,8 +55,9 @@ export async function handleApi(req,store,{now=Date.now(),ip='local'}={}){
   }
   const reportMatch=path.match(/^\/api\/reports\/([a-f0-9]{32})$/);
   if(method==='GET'&&reportMatch){const r=await store.byReport(reportMatch[1],now);if(!r)throw new GameError('Informe no encontrado o vencido.',404);return json(report(r));}
-  const match=path.match(/^\/api\/rooms\/([A-Z2-9]{8})(?:\/(join|start|actions|messages|close))?$/);
-  if(!match)throw new GameError('Ruta no encontrada.',404);const[,code,op]=match;
+  const match=path.match(/^\/api\/rooms\/([^/]+)(?:\/(join|start|actions|messages|close))?$/);
+  if(!match)throw new GameError('Ruta no encontrada.',404);const op=match[2],code=normalizeCode((()=>{try{return decodeURIComponent(match[1]);}catch{return '';}})());
+  if(!code)throw new GameError('Código de sala inválido: tiene 8 letras y números, por ejemplo ABCD-2345.',404);
   if(method==='POST'&&op==='join'){
    const b=await body(req);keys(b,['name']);const n=name(b.name);await store.limit(`join:${client}`,30,300000,now);
    const token=randomHex(32),player={id:randomHex(8),name:n,role:'',tokenHash:await digest(token)};
@@ -51,7 +65,12 @@ export async function handleApi(req,store,{now=Date.now(),ip='local'}={}){
    return json({token,room:snapshot(r,player.id,now)},201);
   }
   const hash=await authHash(req);
-  if(method==='GET'&&!op){let id;const r=await store.mutate(code,now,r=>{id=authorize(r,hash).id;tick(r,now);});return json(snapshot(r,id,now));}
+  if(method==='GET'&&!op){
+   // Only running rooms change with time; avoid a write (and version churn) on every lobby/report poll.
+   const current=await store.get(code,now);if(!current)throw new GameError('No encontramos esa sala, o venció su plazo de 7 días.',404);
+   const id=authorize(current,hash).id;if(current.status!=='running')return json(snapshot(current,id,now));
+   const r=await store.mutate(code,now,r=>{authorize(r,hash);tick(r,now);});return json(snapshot(r,id,now));
+  }
   if(method==='DELETE'&&!op){const r=await store.get(code,now);if(!r)throw new GameError('Sala no encontrada.',404);if(authorize(r,hash).id!==r.hostId)throw new GameError('Solo quien creó la sala puede borrarla.',403);await store.remove(code);return json({deleted:true});}
   if(method!=='POST')throw new GameError('Método no permitido.',405);
   await store.limit(`write:${hash}`,100,60000,now);const b=await body(req);let playerId;
