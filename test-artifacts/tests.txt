@@ -1,0 +1,262 @@
+
+> guardia-incident-simulator@1.0.0 test
+> node --experimental-sqlite --test tests/*.test.mjs
+
+TAP version 13
+# (node:1181) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: solo starts immediately
+ok 1 - solo starts immediately
+  ---
+  duration_ms: 1.651024
+  type: 'test'
+  ...
+# Subtest: cooperative room waits for host
+ok 2 - cooperative room waits for host
+  ---
+  duration_ms: 0.158725
+  type: 'test'
+  ...
+# Subtest: only host can start
+ok 3 - only host can start
+  ---
+  duration_ms: 0.289619
+  type: 'test'
+  ...
+# Subtest: unknown scenario rejected
+ok 4 - unknown scenario rejected
+  ---
+  duration_ms: 0.10778
+  type: 'test'
+  ...
+# Subtest: public catalog contains no solutions
+ok 5 - public catalog contains no solutions
+  ---
+  duration_ms: 0.193417
+  type: 'test'
+  ...
+# Subtest: evidence has time cost and is recorded
+ok 6 - evidence has time cost and is recorded
+  ---
+  duration_ms: 0.327585
+  type: 'test'
+  ...
+# Subtest: idempotent action does not consume time twice
+ok 7 - idempotent action does not consume time twice
+  ---
+  duration_ms: 0.230571
+  type: 'test'
+  ...
+# Subtest: completed action rejected with new id
+ok 8 - completed action rejected with new id
+  ---
+  duration_ms: 0.154689
+  type: 'test'
+  ...
+# Subtest: verification alone does not resolve
+ok 9 - verification alone does not resolve
+  ---
+  duration_ms: 0.298592
+  type: 'test'
+  ...
+# Subtest: viernes: correct recovery and scored report
+ok 10 - viernes: correct recovery and scored report
+  ---
+  duration_ms: 0.681569
+  type: 'test'
+  ...
+# Subtest: viernes: clock expires while disconnected
+ok 11 - viernes: clock expires while disconnected
+  ---
+  duration_ms: 0.177623
+  type: 'test'
+  ...
+# Subtest: cascada: correct recovery and scored report
+ok 12 - cascada: correct recovery and scored report
+  ---
+  duration_ms: 0.163502
+  type: 'test'
+  ...
+# Subtest: cascada: clock expires while disconnected
+ok 13 - cascada: clock expires while disconnected
+  ---
+  duration_ms: 0.063935
+  type: 'test'
+  ...
+# Subtest: memoria: correct recovery and scored report
+ok 14 - memoria: correct recovery and scored report
+  ---
+  duration_ms: 0.33791
+  type: 'test'
+  ...
+# Subtest: memoria: clock expires while disconnected
+ok 15 - memoria: clock expires while disconnected
+  ---
+  duration_ms: 0.06758
+  type: 'test'
+  ...
+# Subtest: wrong mitigation increases harm
+ok 16 - wrong mitigation increases harm
+  ---
+  duration_ms: 0.14191
+  type: 'test'
+  ...
+# Subtest: queue needs breaker first; premature drain can be retried
+ok 17 - queue needs breaker first; premature drain can be retried
+  ---
+  duration_ms: 0.123222
+  type: 'test'
+  ...
+# Subtest: cache needs TTL fix first
+ok 18 - cache needs TTL fix first
+  ---
+  duration_ms: 0.112346
+  type: 'test'
+  ...
+# Subtest: late requests cannot rewind the server clock
+ok 19 - late requests cannot rewind the server clock
+  ---
+  duration_ms: 0.070113
+  type: 'test'
+  ...
+# Subtest: snapshots exclude secret hashes and undiscovered evidence
+ok 20 - snapshots exclude secret hashes and undiscovered evidence
+  ---
+  duration_ms: 0.448464
+  type: 'test'
+  ...
+# Subtest: report unavailable before finish
+ok 21 - report unavailable before finish
+  ---
+  duration_ms: 0.09448
+  type: 'test'
+  ...
+# Subtest: recovered state rejects unnecessary mitigation
+ok 22 - recovered state rejects unnecessary mitigation
+  ---
+  duration_ms: 0.147679
+  type: 'test'
+  ...
+# Subtest: real SQLite health check
+ok 23 - real SQLite health check
+  ---
+  duration_ms: 27.81383
+  type: 'test'
+  ...
+# Subtest: room persists and can be read with token
+ok 24 - room persists and can be read with token
+  ---
+  duration_ms: 5.587771
+  type: 'test'
+  ...
+# Subtest: unauthenticated read denied
+ok 25 - unauthenticated read denied
+  ---
+  duration_ms: 2.342357
+  type: 'test'
+  ...
+# Subtest: token from another room denied
+ok 26 - token from another room denied
+  ---
+  duration_ms: 3.277912
+  type: 'test'
+  ...
+# Subtest: forged client score rejected
+ok 27 - forged client score rejected
+  ---
+  duration_ms: 1.281657
+  type: 'test'
+  ...
+# Subtest: HTML in alias rejected
+ok 28 - HTML in alias rejected
+  ---
+  duration_ms: 1.191664
+  type: 'test'
+  ...
+# Subtest: cross-origin requests rejected
+ok 29 - cross-origin requests rejected
+  ---
+  duration_ms: 0.538817
+  type: 'test'
+  ...
+# Subtest: oversized body rejected
+ok 30 - oversized body rejected
+  ---
+  duration_ms: 1.340845
+  type: 'test'
+  ...
+# Subtest: cooperative room capacity is four
+ok 31 - cooperative room capacity is four
+  ---
+  duration_ms: 4.753631
+  type: 'test'
+  ...
+# Subtest: solo cannot be joined
+ok 32 - solo cannot be joined
+  ---
+  duration_ms: 1.991829
+  type: 'test'
+  ...
+# Subtest: two players share concurrent evidence without loss
+ok 33 - two players share concurrent evidence without loss
+  ---
+  duration_ms: 5.414294
+  type: 'test'
+  ...
+# Subtest: notes are shared as text and idempotent
+ok 34 - notes are shared as text and idempotent
+  ---
+  duration_ms: 3.166276
+  type: 'test'
+  ...
+# Subtest: finished report readable without credentials; private result excluded from ranking
+ok 35 - finished report readable without credentials; private result excluded from ranking
+  ---
+  duration_ms: 3.775358
+  type: 'test'
+  ...
+# Subtest: opted-in score appears in ranking
+ok 36 - opted-in score appears in ranking
+  ---
+  duration_ms: 2.769981
+  type: 'test'
+  ...
+# Subtest: room access expires after seven days
+ok 37 - room access expires after seven days
+  ---
+  duration_ms: 1.758443
+  type: 'test'
+  ...
+# Subtest: host can delete room
+ok 38 - host can delete room
+  ---
+  duration_ms: 2.057726
+  type: 'test'
+  ...
+# Subtest: room creation is rate-limited
+ok 39 - room creation is rate-limited
+  ---
+  duration_ms: 10.807557
+  type: 'test'
+  ...
+# Subtest: unknown API path is 404
+ok 40 - unknown API path is 404
+  ---
+  duration_ms: 0.900003
+  type: 'test'
+  ...
+# Subtest: database persists after close and reopen
+ok 41 - database persists after close and reopen
+  ---
+  duration_ms: 3.832553
+  type: 'test'
+  ...
+1..41
+# tests 41
+# suites 0
+# pass 41
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 142.954976

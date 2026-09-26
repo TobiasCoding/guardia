@@ -1,0 +1,5 @@
+
+> guardia-incident-simulator@1.0.0 check
+> node scripts/check.mjs
+
+11 módulos JavaScript: sintaxis válida.

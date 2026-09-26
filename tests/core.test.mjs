@@ -1,0 +1,56 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {makeRoom,applyAction,tick,start,health,snapshot,report} from '../src/server/engine.mjs';
+import {getScenario,publicScenarios} from '../src/server/catalog.mjs';
+import {openDatabase} from '../src/server/sqlite-node.mjs';
+import {Store} from '../src/server/store.mjs';
+import {handleApi} from '../src/server/api.mjs';
+const NOW=1780000000000;let id=0;
+const room=(scenarioId='viernes',mode='solo')=>makeRoom({code:'ABCD2345',scenarioId,host:{id:'host',name:'Alex',role:'Comando',tokenHash:'hidden-hash'},now:NOW,reportId:'a'.repeat(32),mode});
+const act=(r,a)=>applyAction(r,'host',a,`request-${String(++id).padStart(16,'0')}`,NOW);
+const dbTest=(name,fn)=>test(name,async()=>{const db=openDatabase(':memory:');try{await fn(new Store(db));}finally{db.close();}});
+async function call(s,path,{method='GET',body,token,now=NOW,headers={}}={}){const r=await handleApi(new Request('http://guardia.test/api'+path,{method,headers:{...(body===undefined?{}:{'content-type':'application/json'}),...(token?{authorization:'Bearer '+token}:{}),...headers},body:body===undefined?undefined:JSON.stringify(body)}),s,{now,ip:'test'});return{status:r.status,body:await r.json(),headers:r.headers};}
+async function create(s,extra={}){const r=await call(s,'/rooms',{method:'POST',body:{name:'Alex',scenario:'viernes',mode:'solo',...extra}});assert.equal(r.status,201,JSON.stringify(r.body));return r.body;}
+const action=(s,r,actionId,requestId=`api-request-${String(++id).padStart(16,'0')}`)=>call(s,`/rooms/${r.room.code}/actions`,{method:'POST',token:r.token,body:{actionId,requestId}});
+test('solo starts immediately',()=>assert.equal(room().status,'running'));
+test('cooperative room waits for host',()=>{const r=room('viernes','coop');tick(r,NOW+40000);assert.equal(r.elapsed,0);start(r,'host',NOW);assert.equal(r.status,'running');});
+test('only host can start',()=>assert.throws(()=>start(room('viernes','coop'),'other',NOW)));
+test('unknown scenario rejected',()=>assert.throws(()=>room('__proto__')));
+test('public catalog contains no solutions',()=>{assert.equal(publicScenarios().length,3);assert.ok(!JSON.stringify(publicScenarios()).includes('rootCause'));assert.equal(getScenario('__proto__'),null);});
+test('evidence has time cost and is recorded',()=>{const r=room();act(r,'inspect-api');assert.equal(r.elapsed,5);assert.equal(r.evidence.length,1);assert.ok(r.budget<100);});
+test('idempotent action does not consume time twice',()=>{const r=room();applyAction(r,'host','inspect-api','fixed-request-123456',NOW);applyAction(r,'host','inspect-api','fixed-request-123456',NOW);assert.equal(r.elapsed,5);assert.equal(r.evidence.length,1);});
+test('completed action rejected with new id',()=>{const r=room();act(r,'inspect-api');assert.throws(()=>act(r,'inspect-api'));});
+test('verification alone does not resolve',()=>{const r=room();act(r,'verify');assert.equal(r.status,'running');});
+for(const [scenario,steps]of Object.entries({viernes:['inspect-api','inspect-deploy','communicate','disable-feature','verify'],cascada:['inspect-payments','inspect-queue','communicate','open-breaker','drain-queue','verify'],memoria:['inspect-cache','inspect-database','communicate','spread-ttl','warm-cache','verify']})){
+ test(`${scenario}: correct recovery and scored report`,()=>{const r=room(scenario);steps.forEach(x=>act(r,x));assert.equal(r.status,'resolved');assert.equal(health(r).error,.2);assert.ok(r.score>600&&r.score<=1000);assert.equal(report(r).evidenceCount,2);});
+ test(`${scenario}: clock expires while disconnected`,()=>{const r=room(scenario);tick(r,NOW+400000);assert.equal(r.status,'failed');assert.ok(report(r).rootCause);});
+}
+test('wrong mitigation increases harm',()=>{const r=room();const e=health(r).error;act(r,'scale-api');assert.ok(health(r).error>e);assert.equal(r.mistakes,1);});
+test('queue needs breaker first; premature drain can be retried',()=>{const r=room('cascada');act(r,'drain-queue');assert.ok(!r.flags.fixed);act(r,'open-breaker');act(r,'drain-queue');act(r,'verify');assert.equal(r.status,'resolved');});
+test('cache needs TTL fix first',()=>{const r=room('memoria');act(r,'warm-cache');assert.ok(!r.flags.fixed);act(r,'spread-ttl');act(r,'warm-cache');act(r,'verify');assert.equal(r.status,'resolved');});
+test('late requests cannot rewind the server clock',()=>{const r=room();tick(r,NOW+5000);tick(r,NOW+1000);tick(r,NOW+6000);assert.equal(r.elapsed,6);});
+test('snapshots exclude secret hashes and undiscovered evidence',()=>{const out=JSON.stringify(snapshot(room(),'host',NOW));assert.ok(!out.includes('hidden-hash'));assert.ok(!out.includes('queries_per_request'));});
+test('report unavailable before finish',()=>assert.throws(()=>report(room())));
+test('recovered state rejects unnecessary mitigation',()=>{const r=room();act(r,'disable-feature');assert.throws(()=>act(r,'scale-api'));act(r,'verify');assert.equal(r.status,'resolved');});
+dbTest('real SQLite health check',async s=>assert.equal((await call(s,'/health')).body.ok,true));
+dbTest('room persists and can be read with token',async s=>{const a=await create(s);assert.match(a.token,/^[a-f0-9]{64}$/);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:a.token})).status,200);const stored=await s.get(a.room.code,NOW);assert.ok(!JSON.stringify(stored).includes(a.token));});
+dbTest('unauthenticated read denied',async s=>{const a=await create(s);assert.equal((await call(s,`/rooms/${a.room.code}`)).status,401);});
+dbTest('token from another room denied',async s=>{const a=await create(s),b=await create(s);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:b.token})).status,403);});
+dbTest('forged client score rejected',async s=>assert.equal((await call(s,'/rooms',{method:'POST',body:{name:'Alex',scenario:'viernes',score:1000}})).status,400));
+dbTest('HTML in alias rejected',async s=>assert.equal((await call(s,'/rooms',{method:'POST',body:{name:'<script>x</script>',scenario:'viernes'}})).status,400));
+dbTest('cross-origin requests rejected',async s=>assert.equal((await call(s,'/rooms',{method:'POST',headers:{origin:'https://evil.invalid'},body:{name:'Alex',scenario:'viernes'}})).status,403));
+dbTest('oversized body rejected',async s=>assert.equal((await call(s,'/rooms',{method:'POST',body:{name:'a'.repeat(6000),scenario:'viernes'}})).status,413));
+dbTest('cooperative room capacity is four',async s=>{const a=await create(s,{mode:'coop'});for(const name of['Dani','Vale','Sam'])assert.equal((await call(s,`/rooms/${a.room.code}/join`,{method:'POST',body:{name}})).status,201);assert.equal((await call(s,`/rooms/${a.room.code}/join`,{method:'POST',body:{name:'Quinta'}})).status,409);});
+dbTest('solo cannot be joined',async s=>{const a=await create(s);assert.equal((await call(s,`/rooms/${a.room.code}/join`,{method:'POST',body:{name:'Dani'}})).status,403);});
+dbTest('two players share concurrent evidence without loss',async s=>{const a=await create(s,{mode:'coop'}),b=(await call(s,`/rooms/${a.room.code}/join`,{method:'POST',body:{name:'Dani'}})).body;await call(s,`/rooms/${a.room.code}/start`,{method:'POST',body:{},token:a.token});const rs=await Promise.all([action(s,a,'inspect-api'),action(s,b,'inspect-database')]);assert.deepEqual(rs.map(x=>x.status),[200,200]);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:a.token})).body.evidence.length,2);});
+dbTest('notes are shared as text and idempotent',async s=>{const a=await create(s),path=`/rooms/${a.room.code}/messages`,body={text:'<img src=x> hipótesis',requestId:'message-request-12345'};await call(s,path,{method:'POST',token:a.token,body});await call(s,path,{method:'POST',token:a.token,body});const r=(await call(s,`/rooms/${a.room.code}`,{token:a.token})).body;assert.equal(r.messages.length,1);assert.equal(r.messages[0].text,body.text);});
+dbTest('finished report readable without credentials; private result excluded from ranking',async s=>{const a=await create(s);await action(s,a,'disable-feature');const end=await action(s,a,'verify');assert.equal(end.body.status,'resolved');const r=await call(s,`/reports/${end.body.reportId}`);assert.equal(r.status,200);assert.ok(!JSON.stringify(r.body).includes('tokenHash'));assert.equal((await call(s,'/leaderboard')).body.entries.length,0);});
+dbTest('opted-in score appears in ranking',async s=>{const a=await create(s,{listed:true});await action(s,a,'disable-feature');await action(s,a,'verify');assert.equal((await call(s,'/leaderboard')).body.entries.length,1);});
+dbTest('room access expires after seven days',async s=>{const a=await create(s);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:a.token,now:NOW+7*86400000+1})).status,404);});
+dbTest('host can delete room',async s=>{const a=await create(s);assert.equal((await call(s,`/rooms/${a.room.code}`,{method:'DELETE',token:a.token})).status,200);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:a.token})).status,404);});
+dbTest('room creation is rate-limited',async s=>{for(let i=0;i<12;i++)await create(s);assert.equal((await call(s,'/rooms',{method:'POST',body:{name:'Alex',scenario:'viernes'}})).status,429);});
+dbTest('unknown API path is 404',async s=>assert.equal((await call(s,'/unknown')).status,404));
+test('database persists after close and reopen',async()=>{const dir=mkdtempSync(join(tmpdir(),'guardia-')),path=join(dir,'db.sqlite');let db;try{db=openDatabase(path);let s=new Store(db);const a=await create(s);await action(s,a,'inspect-api');db.close();db=openDatabase(path);s=new Store(db);assert.equal((await call(s,`/rooms/${a.room.code}`,{token:a.token})).body.evidence.length,1);}finally{db?.close();rmSync(dir,{recursive:true,force:true});}});

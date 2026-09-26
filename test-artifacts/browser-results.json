@@ -1,0 +1,15 @@
+{
+  "mode": "test-render-bridge",
+  "passed": [
+    "Landing: 3 scenarios; 5 viewport widths without horizontal overflow",
+    "Solo: evidence, escaped notes, preserved draft/focus, recovery, replay and Markdown export",
+    "Co-op: independent sessions, shared evidence, ordered mitigation and identical final score",
+    "Mobile: complete third scenario and report without overflow",
+    "No JavaScript exceptions"
+  ],
+  "pageErrors": [],
+  "limitations": [
+    "Cloud deployment and Vite build not verified",
+    "Test origin/storage adapter used; actual HTTP backend and SQLite. Native CSP and browser origin isolation not tested."
+  ]
+}

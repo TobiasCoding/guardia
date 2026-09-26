@@ -1,0 +1,5 @@
+PASS Landing: 3 scenarios; 5 viewport widths without horizontal overflow
+PASS Solo: evidence, escaped notes, preserved draft/focus, recovery, replay and Markdown export
+PASS Co-op: independent sessions, shared evidence, ordered mitigation and identical final score
+PASS Mobile: complete third scenario and report without overflow
+PASS No JavaScript exceptions
